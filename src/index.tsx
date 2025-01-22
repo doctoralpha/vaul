@@ -22,7 +22,7 @@ import { DrawerDirection } from './types';
 import { useControllableState } from './use-controllable-state';
 import { useScaleBackground } from './use-scale-background';
 import { usePositionFixed } from './use-position-fixed';
-import { isIOS, isMobileFirefox } from './browser';
+import { isIOS, isMobileFirefox, isAndroid } from './browser';
 
 export interface WithFadeFromProps {
   /**
@@ -475,6 +475,11 @@ export function Root({
 
   React.useEffect(() => {
     function onVisualViewportChange() {
+      if (!drawerRef.current) return;
+
+      // drawerRef.current.style.height = ''
+      // drawerRef.current.style.bottom = ''
+
       if (!drawerRef.current || !repositionInputs) return;
 
       const focusedElement = document.activeElement as HTMLElement;
@@ -564,7 +569,7 @@ export function Root({
           }
           // Place drawer at bottom of viewport
           drawerRef.current.style.bottom = '0px';
-        } else if (!isMobileFirefox() && !keyboardIsOpen.current) {
+        } else if (!isMobileFirefox() && !keyboardIsOpen.current && !isAndroid()) {
           // Reset to original state when keyboard is closed
           drawerRef.current.style.height = `${initialDrawerHeight.current}px`;
           // Place drawer at bottom of viewport
