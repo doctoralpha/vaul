@@ -475,11 +475,6 @@ export function Root({
 
   React.useEffect(() => {
     function onVisualViewportChange() {
-      if (!drawerRef.current) return;
-
-      // drawerRef.current.style.height = ''
-      // drawerRef.current.style.bottom = ''
-
       if (!drawerRef.current || !repositionInputs) return;
 
       const focusedElement = document.activeElement as HTMLElement;
