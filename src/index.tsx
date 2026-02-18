@@ -209,6 +209,7 @@ export function Root({
   const keyboardIsOpen = React.useRef(false);
   const shouldAnimate = React.useRef(!defaultOpen);
   const previousDiffFromInitial = React.useRef(0);
+  const lastKnownVisualViewportHeight = React.useRef(0);
   const drawerRef = React.useRef<HTMLDivElement>(null);
   const drawerHeightRef = React.useRef(drawerRef.current?.getBoundingClientRect().height || 0);
   const drawerWidthRef = React.useRef(drawerRef.current?.getBoundingClientRect().width || 0);
@@ -487,9 +488,43 @@ export function Root({
       // This prevents an unrelated modal on top from collapsing this drawer.
       if ((isInput(focusedElement) && isFocusedInsideDrawer) || keyboardIsOpen.current) {
         const visualViewport = window.visualViewport;
-        const visualViewportHeight = visualViewport?.height || 0;
         const visualViewportOffsetTop = visualViewport?.offsetTop || 0;
         const totalHeight = window.innerHeight;
+
+        // Some iOS/WKWebView environments report transient visualViewport.height values like 0
+        // (or extremely small numbers) during browser UI transitions. Using those in height/transform
+        // calculations can push the drawer off-screen. We keep a "last known good" height and ignore
+        // obviously invalid measurements.
+        const visualViewportHeight = (() => {
+          const raw = visualViewport?.height;
+          const candidate = typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
+          const fallback =
+            lastKnownVisualViewportHeight.current > 0
+              ? lastKnownVisualViewportHeight.current
+              : typeof totalHeight === 'number' && Number.isFinite(totalHeight) && totalHeight > 0
+                ? totalHeight
+                : 0;
+
+          // Ignore 0/NaN/negative values (known to occur transiently on iOS/WKWebView).
+          if (candidate <= 0) return fallback;
+
+          // Also ignore extremely small values on normal-sized viewports; these are almost always
+          // transient. (Example: permission sheets / browser chrome animations reporting 0–80px.)
+          if (
+            typeof totalHeight === 'number' &&
+            Number.isFinite(totalHeight) &&
+            totalHeight > 300 &&
+            candidate < 100
+          ) {
+            return fallback;
+          }
+
+          // Clamp to totalHeight when available to avoid negative diffs.
+          const safe =
+            typeof totalHeight === 'number' && totalHeight > 0 ? Math.min(candidate, totalHeight) : candidate;
+          lastKnownVisualViewportHeight.current = safe;
+          return safe;
+        })();
 
         // This is the height of the keyboard.
         // Normal case (adjustResize): totalHeight - visualViewportHeight > 0.
@@ -538,7 +573,7 @@ export function Root({
 
           // When fixed, only adjust height to prevent scrolling issues
           if (fixed) {
-            drawerRef.current.style.height = `${newDrawerHeight - Math.max(diffFromInitial, 0)}px`;
+            drawerRef.current.style.height = `${Math.max(newDrawerHeight - Math.max(diffFromInitial, 0), 0)}px`;
             drawerRef.current.style.bottom = '0px';
           } else {
             // Position drawer above keyboard with proper height
@@ -558,7 +593,7 @@ export function Root({
           // When fixed, don't move the drawer upwards if there's space, but rather only
           // change its height so it's fully scrollable when the keyboard is open
           if (fixed) {
-            drawerRef.current.style.height = `${height - Math.max(diffFromInitial, 0)}px`;
+            drawerRef.current.style.height = `${Math.max(height - Math.max(diffFromInitial, 0), 0)}px`;
           } else {
             drawerRef.current.style.height = `${Math.max(newDrawerHeight, visualViewportHeight - offsetFromTop)}px`;
           }
